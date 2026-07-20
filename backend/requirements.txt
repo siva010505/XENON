@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+browser-use==0.13.6
+langchain-nvidia-ai-endpoints
+langchain-openai
+python-dotenv
+websockets
+aiohttp
