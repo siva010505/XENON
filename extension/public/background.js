@@ -33,6 +33,87 @@ function startServer() {
 // Try to start immediately when Service Worker boots
 startServer();
 
+let isAgentRunning = false;
+
+function updateEdgeLighting() {
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://'))) return;
+      
+      const shouldShowHere = isAgentRunning && tab.active;
+      
+      const cssCode = `
+        @keyframes xenon-breathe {
+          0%, 100% { 
+            background-color: rgba(0, 210, 255, 0.005);
+            box-shadow: 
+              inset 0 0 2px 1px rgba(0, 210, 255, 0.4), 
+              inset 0 0 15px rgba(0, 210, 255, 0.2), 
+              inset 0 0 40px rgba(0, 210, 255, 0.05); 
+          }
+          50% { 
+            background-color: rgba(0, 210, 255, 0.02);
+            box-shadow: 
+              inset 0 0 4px 2px rgba(0, 210, 255, 0.5), 
+              inset 0 0 25px rgba(0, 210, 255, 0.4), 
+              inset 0 0 70px rgba(0, 210, 255, 0.1); 
+          }
+        }
+        #xenon-agent-comet-border {
+          position: fixed;
+          top: 0; left: 0; width: 100vw; height: 100vh;
+          pointer-events: none;
+          z-index: 2147483647;
+          box-sizing: border-box;
+          border: none;
+          animation: xenon-breathe 2.5s infinite ease-in-out;
+        }
+      `;
+
+      if (shouldShowHere) {
+        chrome.scripting.insertCSS({
+          target: { tabId: tab.id },
+          css: cssCode
+        }).catch(() => {});
+        
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            if (document.getElementById('xenon-agent-comet-border')) return;
+            const container = document.createElement('div');
+            container.id = 'xenon-agent-comet-border';
+            if (document.body) document.body.appendChild(container);
+            else document.documentElement.appendChild(container);
+          }
+        }).catch(() => {});
+      } else {
+        chrome.scripting.removeCSS({
+          target: { tabId: tab.id },
+          css: cssCode
+        }).catch(() => {});
+        
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            const container = document.getElementById('xenon-agent-comet-border');
+            if (container) container.remove();
+          }
+        }).catch(() => {});
+      }
+    });
+  });
+}
+
+chrome.tabs.onActivated.addListener(() => {
+  if (isAgentRunning) updateEdgeLighting();
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (isAgentRunning && changeInfo.status === 'complete') {
+    updateEdgeLighting();
+  }
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'start_server_if_needed') {
     startServer();
@@ -40,72 +121,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.action === 'toggleEdgeLighting') {
-    chrome.tabs.query({}, (tabs) => {
-      tabs.forEach(tab => {
-        if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://'))) return;
-        
-        const cssCode = `
-          @keyframes xenon-breathe {
-            0%, 100% { 
-              background-color: rgba(0, 210, 255, 0.01);
-              box-shadow: 
-                inset 0 0 2px 1px rgba(0, 210, 255, 0.8), 
-                inset 0 0 15px rgba(0, 210, 255, 0.4), 
-                inset 0 0 40px rgba(0, 210, 255, 0.1); 
-            }
-            50% { 
-              background-color: rgba(0, 210, 255, 0.04);
-              box-shadow: 
-                inset 0 0 4px 2px rgba(0, 210, 255, 1), 
-                inset 0 0 25px rgba(0, 210, 255, 0.8), 
-                inset 0 0 70px rgba(0, 210, 255, 0.2); 
-            }
-          }
-          #xenon-agent-comet-border {
-            position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            pointer-events: none;
-            z-index: 2147483647;
-            box-sizing: border-box;
-            border: none;
-            animation: xenon-breathe 2.5s infinite ease-in-out;
-          }
-        `;
-
-        if (message.shouldShow) {
-          chrome.scripting.insertCSS({
-            target: { tabId: tab.id },
-            css: cssCode
-          }).catch(() => {});
-          
-          chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: () => {
-              const oldContainer = document.getElementById('xenon-agent-comet-border');
-              if (oldContainer) oldContainer.remove();
-              
-              const container = document.createElement('div');
-              container.id = 'xenon-agent-comet-border';
-              
-              if (document.body) document.body.appendChild(container);
-              else document.documentElement.appendChild(container);
-            }
-          }).catch(err => console.error("Injection failed:", err));
-        } else {
-          chrome.scripting.removeCSS({
-            target: { tabId: tab.id },
-            css: cssCode
-          }).catch(() => {});
-          
-          chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: () => {
-              const container = document.getElementById('xenon-agent-comet-border');
-              if (container) container.remove();
-            }
-          }).catch(() => {});
-        }
-      });
-    });
+    isAgentRunning = message.shouldShow;
+    updateEdgeLighting();
   }
 });
