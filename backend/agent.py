@@ -261,39 +261,27 @@ async def run_browser_task(task_description: str, send_update_callback, tab_url:
             except Exception as e:
                 print(f"[DEBUG step_callback] Error: {e}")
 
-    personal_info = ""
-    try:
-        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        info_path = os.path.join(root_dir, "personal_info.json")
-        if os.path.exists(info_path):
-            with open(info_path, 'r', encoding='utf-8') as f:
-                personal_info = f"\n\nUSER PROFILE DATA (Use this to fill forms, job applications, or logins if required):\n{f.read()}"
-    except Exception:
-        pass
-
     enhanced_task = (
         f"CURRENT PAGE: {tab_title} ({tab_url})\n"
         f"TASK: {task_description}\n\n"
         "CRITICAL INSTRUCTIONS:\n"
         "1. You MUST perform this task on the CURRENT PAGE. Do NOT navigate away to a different website unless explicitly told to do so in the TASK.\n"
         "2. ONLY DO EXACTLY WHAT IS ASKED. If the user asks to 'apply to this job', assume the job is already on the screen. Do NOT search for new jobs, do NOT open new tabs, and do NOT perform actions that were not explicitly requested.\n"
-        "3. The USER PROFILE DATA provided below is ONLY to be used for filling out forms or answering specific questions on the current page. Do NOT use it to initiate searches.\n"
+        "3. If you encounter a form, job application, or login, you can use the 'get_personal_info' tool to retrieve the user's profile data (resume, skills, address, etc.) on demand. DO NOT hallucinate personal data.\n"
         "4. If asked to act on a single item (e.g., 'apply to this job'), do it EXACTLY ONCE. After the action succeeds, immediately use the 'done' action to finish.\n"
         "5. Do NOT use 'open_tab' or 'search_google' unless the task cannot be done on the current page."
-        f"{personal_info}"
     )
 
     from browser_use import Controller
-    from browser_use.tools.service import Tools
     from browser_use.tools.views import NavigateAction
     from browser_use.agent.views import ActionResult
     
     # Task lower already computed above
     
     # ---- XenonNoNewTabTools: subclass that strips new_tab=True ----
-    class XenonNoNewTabTools(Tools):
+    class XenonNoNewTabTools(Controller):
         """
-        Subclass of browser-use Tools that prevents unwanted new tab opening.
+        Subclass of browser-use Controller that prevents unwanted new tab opening.
         
         Layers of protection:
         1. Intercept the 'navigate' action in act() and force new_tab=False
@@ -361,6 +349,18 @@ async def run_browser_task(task_description: str, send_update_callback, tab_url:
         exclude_actions=exclude_actions if exclude_actions else None,
         allow_new_tabs=user_explicitly_wants_new_tab
     )
+    
+    @controller.action("Get user personal profile data, resume details, and skills to fill out forms and applications.")
+    async def get_personal_info():
+        try:
+            root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            info_path = os.path.join(root_dir, "personal_info.json")
+            if os.path.exists(info_path):
+                with open(info_path, "r", encoding="utf-8") as f:
+                    return f"USER PROFILE DATA:\n{f.read()}"
+        except Exception as e:
+            return f"Error retrieving personal info: {e}"
+        return "No personal profile data found."
     
     # ---- Override system prompt ----
     override_system_message = """<SYSTEM_OVERRIDE>
