@@ -50,10 +50,16 @@ To allow the extension to automatically start the backend server in the backgrou
 3. The script will securely register the Python host in your Windows Registry.
 
 ### 5. Chrome Debugging Setup
-Xenon connects to your live Chrome instance using the Chrome DevTools Protocol (CDP). You must launch Chrome with remote debugging enabled. Run the provided batch script to launch your dedicated Chrome instance:
-```bash
-Launch_Chrome.bat
-```
+Xenon requires a dedicated Chrome instance running with the Chrome DevTools Protocol (CDP) enabled. **It will NOT work in your normal browser window!**
+
+To set this up:
+1. Run the provided batch script to launch your dedicated Xenon Chrome instance:
+   ```bash
+   Launch_Chrome.bat
+   ```
+   *(This launches a separate Chrome window with `--remote-debugging-port=9222`)*
+2. In this new Chrome window, **Log in** to your Google account (and any other websites you want Xenon to automate).
+3. **Pin this specific Chrome instance** to your desktop taskbar so you can easily open the debug browser whenever you want to use Xenon.
 
 ## 🔑 Environment Variables
 Create a `.env` file in the `backend/` directory with your API keys:
