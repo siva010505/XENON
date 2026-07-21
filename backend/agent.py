@@ -9,7 +9,7 @@ load_dotenv()
 CDP_HTTP = "http://localhost:9222"
 TASK_TIMEOUT_SECONDS = 3600  # hard ceiling so nothing hangs forever (1 hour)
 
-def isolate_tab_monkeypatch(target_url: str, target_title: str = ""):
+def isolate_tab_monkeypatch(target_url: str, target_title: str = "", allow_new_tabs: bool = False):
     """
     Monkeypatches browser_use SessionManager to completely ignore all background tabs 
     except the one matching target_url. This prevents watchdogs and CDP from timing out
@@ -84,10 +84,8 @@ def isolate_tab_monkeypatch(target_url: str, target_title: str = ""):
             tid = info.get('targetId')
             ttype = info.get('type')
             
-            if ttype in ('page', 'tab') and tid != target_id:
-                # We still allow new blank tabs in case the agent creates them
-                if info.get('url') not in ('about:blank', ''):
-                    return # IGNORE
+            if not allow_new_tabs and ttype in ('page', 'tab') and tid != target_id:
+                return # STRICTLY IGNORE ALL OTHER TABS
                     
             await orig_handle(self, event)
             
@@ -110,7 +108,12 @@ async def run_browser_task(task_description: str, send_update_callback, tab_url:
     """
     
     # Apply monkeypatch before creating the Browser instance
-    target_id = isolate_tab_monkeypatch(tab_url, tab_title)
+    task_lower = task_description.lower()
+    user_explicitly_wants_new_tab = any(kw in task_lower for kw in [
+        "new tab", "open tab", "separate tab", "different tab"
+    ])
+    
+    target_id = isolate_tab_monkeypatch(tab_url, tab_title, user_explicitly_wants_new_tab)
     
     from browser_use.llm.openai.chat import ChatOpenAI
     from browser_use.llm.google.chat import ChatGoogle
@@ -182,31 +185,32 @@ async def run_browser_task(task_description: str, send_update_callback, tab_url:
     
     models_list = []
     
-    # Tier 1: Primary Gemini Key
-    if gemini_key_1:
-        models_list.extend([
-            ChatGoogle(model="gemini-3.1-flash-lite", api_key=gemini_key_1),
-            ChatGoogle(model="gemini-3-flash", api_key=gemini_key_1),
-            ChatGoogle(model="gemini-3.5-flash", api_key=gemini_key_1)
-        ])
-        
-    # Tier 2: Secondary Gemini Key
-    if gemini_key_2:
-        models_list.extend([
-            ChatGoogle(model="gemini-3.1-flash-lite", api_key=gemini_key_2),
-            ChatGoogle(model="gemini-3-flash", api_key=gemini_key_2),
-            ChatGoogle(model="gemini-3.5-flash", api_key=gemini_key_2)
-        ])
-        
-    # Tier 3: NIM DeepSeek
+    # Tier 1: Fast NVIDIA NIM DeepSeek if key is present
     if nim_key:
         models_list.append(
             ChatOpenAI(
                 model="deepseek-ai/deepseek-v4-flash",
                 api_key=nim_key,
-                base_url="https://integrate.api.nvidia.com/v1"
+                base_url="https://integrate.api.nvidia.com/v1",
+                max_retries=1
             )
         )
+
+    # Tier 2: Primary Gemini Key
+    if gemini_key_1:
+        models_list.extend([
+            ChatGoogle(model="gemini-2.0-flash", api_key=gemini_key_1, max_retries=1),
+            ChatGoogle(model="gemini-2.0-flash-lite", api_key=gemini_key_1, max_retries=1),
+            ChatGoogle(model="gemini-1.5-flash", api_key=gemini_key_1, max_retries=1)
+        ])
+        
+    # Tier 3: Secondary Gemini Key
+    if gemini_key_2:
+        models_list.extend([
+            ChatGoogle(model="gemini-2.0-flash", api_key=gemini_key_2, max_retries=1),
+            ChatGoogle(model="gemini-2.0-flash-lite", api_key=gemini_key_2, max_retries=1),
+            ChatGoogle(model="gemini-1.5-flash", api_key=gemini_key_2, max_retries=1)
+        ])
         
     model = TieredFallbackLLM(models_list)
 
@@ -283,10 +287,7 @@ async def run_browser_task(task_description: str, send_update_callback, tab_url:
     from browser_use.tools.views import NavigateAction
     from browser_use.agent.views import ActionResult
     
-    task_lower = task_description.lower()
-    user_explicitly_wants_new_tab = any(kw in task_lower for kw in [
-        "new tab", "open tab", "separate tab", "different tab"
-    ])
+    # Task lower already computed above
     
     # ---- XenonNoNewTabTools: subclass that strips new_tab=True ----
     class XenonNoNewTabTools(Tools):
@@ -350,13 +351,10 @@ async def run_browser_task(task_description: str, send_update_callback, tab_url:
     
     if not user_explicitly_wants_new_tab:
         exclude_actions.append('open_tab')
-        exclude_actions.append('navigate')
+        exclude_actions.append('switch')
+        exclude_actions.append('close')
     if "search google" not in task_lower and "google search" not in task_lower:
         exclude_actions.append('search')
-    if "new tab" not in task_lower and "open tab" not in task_lower:
-        exclude_actions.append('switch')
-    if not user_explicitly_wants_new_tab:
-        exclude_actions.append('close')
     
     controller = XenonNoNewTabTools(
         exclude_actions=exclude_actions if exclude_actions else None,
@@ -383,25 +381,45 @@ CRITICAL: This agent runs in STAY-ON-CURRENT-PAGE mode.
         register_new_step_callback=step_callback,
         use_thinking=False,
         use_judge=False,
+        enable_planning=False,
+        directly_open_url=False,
+        max_actions_per_step=3,
         max_failures=3,
         loop_detection_enabled=True,
         extend_system_message=override_system_message,
     )
 
-    if not user_explicitly_wants_new_tab and agent.browser_session:
+    if not user_explicitly_wants_new_tab and target_id:
         try:
-            target_blank_js = (
-                "(function(){"
-                "var p=HTMLAnchorElement.prototype,orig=Object.getOwnPropertyDescriptor(p,'target')||{set:function(v){this.setAttribute('target',v)},get:function(){return this.getAttribute('target')||''}};"
-                "Object.defineProperty(p,'target',{"
-                "set:function(v){if(v==='_blank'||v==='blank'||v==='_new'||v==='new'){this.setAttribute('target','_self');return;}orig.set.call(this,v);},"
-                "get:orig.get"
-                "});})();"
-            )
-            await agent.browser_session._cdp_add_init_script(target_blank_js)
-            print("[Xenon] Injected target=_blank stripper via CDP Page.addScriptToEvaluateOnNewDocument")
+            import websockets
+            targets = requests.get(f"{CDP_HTTP}/json").json()
+            matching_targets = [t for t in targets if t.get('id') == target_id]
+            if matching_targets and 'webSocketDebuggerUrl' in matching_targets[0]:
+                ws_url = matching_targets[0]['webSocketDebuggerUrl']
+                target_blank_js = (
+                    "(function(){"
+                    "var p=HTMLAnchorElement.prototype,orig=Object.getOwnPropertyDescriptor(p,'target')||{set:function(v){this.setAttribute('target',v)},get:function(){return this.getAttribute('target')||''}};"
+                    "Object.defineProperty(p,'target',{"
+                    "set:function(v){if(v==='_blank'||v==='blank'||v==='_new'||v==='new'){this.setAttribute('target','_self');return;}orig.set.call(this,v);},"
+                    "get:orig.get"
+                    "});"
+                    "document.querySelectorAll('a[target=\"_blank\"], a[target=\"blank\"]').forEach(function(a){a.target='_self';});"
+                    "})();"
+                )
+                async with websockets.connect(ws_url) as ws:
+                    await ws.send(json.dumps({
+                        "id": 1,
+                        "method": "Page.addScriptToEvaluateOnNewDocument",
+                        "params": {"source": target_blank_js}
+                    }))
+                    await ws.send(json.dumps({
+                        "id": 2,
+                        "method": "Runtime.evaluate",
+                        "params": {"expression": target_blank_js}
+                    }))
+                print("[Xenon] Successfully injected target=_blank stripper directly onto target tab via CDP")
         except Exception as ex:
-            print(f"[Xenon] Warning: Could not inject target=_blank stripper: {ex}")
+            print(f"[Xenon] Warning: CDP script injection failed: {ex}")
 
     try:
         # Hard timeout — turns a silent infinite hang into a clean,
