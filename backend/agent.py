@@ -55,8 +55,6 @@ def isolate_tab_monkeypatch(target_url: str, target_title: str = "", allow_new_t
         
         orig_init = SessionManager._initialize_existing_targets
         
-        existing_target_ids = set()
-        
         async def patched_init(self):
             cdp_client = self.browser_session._cdp_client_root
             if not cdp_client: 
@@ -66,9 +64,15 @@ def isolate_tab_monkeypatch(target_url: str, target_title: str = "", allow_new_t
             
             async def mock_getTargets(*args, **kwargs):
                 result = await orig_getTargets(*args, **kwargs)
-                for target_info in result.get('targetInfos', []):
-                    tid = target_info.get('targetId')
-                    existing_target_ids.add(tid)
+                if target_id:
+                    filtered_targets = []
+                    for t in result.get('targetInfos', []):
+                        if t.get('type') in ('page', 'tab'):
+                            if t.get('targetId') == target_id:
+                                filtered_targets.append(t)
+                        else:
+                            filtered_targets.append(t)
+                    result['targetInfos'] = filtered_targets
                 return result
                 
             cdp_client.send.Target.getTargets = mock_getTargets
@@ -82,7 +86,10 @@ def isolate_tab_monkeypatch(target_url: str, target_title: str = "", allow_new_t
             tid = info.get('targetId')
             ttype = info.get('type')
             
-            if not allow_new_tabs and ttype in ('page', 'tab') and tid != target_id and tid not in existing_target_ids:
+            if not allow_new_tabs and ttype in ('page', 'tab') and tid != target_id:
+                cdp_client = getattr(self.browser_session, '_cdp_client_root', None)
+                if cdp_client:
+                    asyncio.create_task(cdp_client.send.Target.closeTarget(targetId=tid))
                 return # IGNORE new tabs opened AFTER initial connection
                     
             await orig_handle(self, event)
@@ -183,7 +190,15 @@ async def run_browser_task(task_description: str, send_update_callback, tab_url:
     
     models_list = []
     
-    # Tier 1: Fast NVIDIA NIM DeepSeek if key is present
+    # Tier 1: Primary Gemini Key
+    if gemini_key_1:
+        models_list.append(ChatGoogle(model="gemini-3.1-flash-lite", api_key=gemini_key_1, max_retries=1))
+        
+    # Tier 2: Secondary Gemini Key
+    if gemini_key_2:
+        models_list.append(ChatGoogle(model="gemini-3.1-flash-lite", api_key=gemini_key_2, max_retries=1))
+        
+    # Tier 3: Fast NVIDIA NIM DeepSeek if key is present
     if nim_key:
         models_list.append(
             ChatOpenAI(
@@ -193,22 +208,9 @@ async def run_browser_task(task_description: str, send_update_callback, tab_url:
                 max_retries=1
             )
         )
-
-    # Tier 2: Primary Gemini Key
-    if gemini_key_1:
-        models_list.extend([
-            ChatGoogle(model="gemini-2.0-flash", api_key=gemini_key_1, max_retries=1),
-            ChatGoogle(model="gemini-2.0-flash-lite", api_key=gemini_key_1, max_retries=1),
-            ChatGoogle(model="gemini-1.5-flash", api_key=gemini_key_1, max_retries=1)
-        ])
         
-    # Tier 3: Secondary Gemini Key
-    if gemini_key_2:
-        models_list.extend([
-            ChatGoogle(model="gemini-2.0-flash", api_key=gemini_key_2, max_retries=1),
-            ChatGoogle(model="gemini-2.0-flash-lite", api_key=gemini_key_2, max_retries=1),
-            ChatGoogle(model="gemini-1.5-flash", api_key=gemini_key_2, max_retries=1)
-        ])
+    if not models_list:
+        raise ValueError("No valid API keys found for LLM setup. Please check .env file.")
         
     model = TieredFallbackLLM(models_list)
 
@@ -396,12 +398,13 @@ CRITICAL: This agent runs in STAY-ON-CURRENT-PAGE mode.
                 ws_url = matching_targets[0]['webSocketDebuggerUrl']
                 target_blank_js = (
                     "(function(){"
-                    "var p=HTMLAnchorElement.prototype,orig=Object.getOwnPropertyDescriptor(p,'target')||{set:function(v){this.setAttribute('target',v)},get:function(){return this.getAttribute('target')||''}};"
-                    "Object.defineProperty(p,'target',{"
-                    "set:function(v){if(v==='_blank'||v==='blank'||v==='_new'||v==='new'){this.setAttribute('target','_self');return;}orig.set.call(this,v);},"
-                    "get:orig.get"
-                    "});"
-                    "document.querySelectorAll('a[target=\"_blank\"], a[target=\"blank\"]').forEach(function(a){a.target='_self';});"
+                    "document.addEventListener('click', function(e) {"
+                    "  var a = e.target.closest && e.target.closest('a');"
+                    "  if (a && (a.target === '_blank' || a.target === '_new' || a.target === 'blank')) {"
+                    "    a.target = '_self';"
+                    "  }"
+                    "}, true);"
+                    "window.open = function(url) { window.location.href = url; return window; };"
                     "})();"
                 )
                 async with websockets.connect(ws_url) as ws:

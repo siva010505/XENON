@@ -1,13 +1,11 @@
 @echo off
-echo =========================================
-echo Closing background Chrome processes...
-echo =========================================
-taskkill /F /IM chrome.exe /T >nul 2>&1
-timeout /t 2 >nul
-
+echo ========================================================
+echo Launching Dedicated Xenon Chrome Debugging Instance
+echo ========================================================
 echo.
-echo =========================================
-echo Starting Chrome for Xenon Agent...
-echo =========================================
-start chrome --remote-debugging-port=9222 --user-data-dir="%LOCALAPPDATA%\Google\Chrome\XenonProfile"
-exit
+echo Make sure you log in to your Google Account and any other 
+echo websites here so Xenon can automate them!
+echo.
+echo Pin this window to your taskbar for easy access.
+echo.
+start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="%LOCALAPPDATA%\Google\Chrome\User Data Xenon"

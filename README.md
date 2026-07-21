@@ -18,6 +18,16 @@ Xenon is a powerful, autonomous AI web automation assistant. Powered by state-of
 - **Frontend (Extension)**: React, Vite, Vanilla CSS
 - **AI Models**: Google Gemini (`gemini-3.1-flash-lite`, `gemini-3.5-flash`), DeepSeek via NVIDIA NIM
 
+## ⚠️ CRITICAL FIRST STEP: Chrome Debugging Setup
+Xenon requires a dedicated Chrome instance running with the Chrome DevTools Protocol (CDP) enabled. **It will NOT work in your normal browser window!**
+
+1. Run the `Launch_Chrome.bat` script located in the root folder. 
+   *(This launches a separate Chrome window with `--remote-debugging-port=9222` and its own isolated profile).*
+2. **Log in** to your Google account (and any other websites you want Xenon to automate) in this new window.
+3. **Pin this specific Chrome instance to your desktop taskbar** so you can easily open it whenever you want to use Xenon.
+
+Xenon will ONLY run in this special Chrome window.
+
 ## 📦 Setup & Installation
 
 ### 1. Backend Dependencies
@@ -49,17 +59,8 @@ To allow the extension to automatically start the backend server in the backgrou
 2. Paste the Extension ID when prompted.
 3. The script will securely register the Python host in your Windows Registry.
 
-### 5. Chrome Debugging Setup
-Xenon requires a dedicated Chrome instance running with the Chrome DevTools Protocol (CDP) enabled. **It will NOT work in your normal browser window!**
-
-To set this up:
-1. Run the provided batch script to launch your dedicated Xenon Chrome instance:
-   ```bash
-   Launch_Chrome.bat
-   ```
-   *(This launches a separate Chrome window with `--remote-debugging-port=9222`)*
-2. In this new Chrome window, **Log in** to your Google account (and any other websites you want Xenon to automate).
-3. **Pin this specific Chrome instance** to your desktop taskbar so you can easily open the debug browser whenever you want to use Xenon.
+### 5. Final Check
+Ensure the Native Host is installed and you are using the dedicated Chrome profile created by `Launch_Chrome.bat`.
 
 ## 🔑 Environment Variables
 Create a `.env` file in the `backend/` directory with your API keys:
