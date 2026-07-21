@@ -1,6 +1,7 @@
 import os
 import asyncio
 import requests
+import json
 from dotenv import load_dotenv
 from browser_use import Agent, Browser, ChatGoogle
 
@@ -89,7 +90,7 @@ def isolate_tab_monkeypatch(target_url: str, target_title: str = "", allow_new_t
             if not allow_new_tabs and ttype in ('page', 'tab') and tid != target_id:
                 cdp_client = getattr(self.browser_session, '_cdp_client_root', None)
                 if cdp_client:
-                    asyncio.create_task(cdp_client.send.Target.closeTarget(targetId=tid))
+                    asyncio.create_task(cdp_client.send.Target.closeTarget(target_id=tid))
                 return # IGNORE new tabs opened AFTER initial connection
                     
             await orig_handle(self, event)
@@ -369,6 +370,7 @@ CRITICAL: This agent runs in STAY-ON-CURRENT-PAGE mode.
 - If you clicked a link and a new tab opened, IGNORE it — stay on the current tab and continue your task there.
 - The only exception: if the USER REQUEST explicitly says "open a new tab" or "search Google", you may navigate or search.
 - Your goal is speed. Combine actions aggressively. Use input+click, click+click, input+input in a single step whenever they don't change the page state between actions.
+- AVOID REPETITIVE LOOPS. If asked to process many items (e.g. delete all emails), find and use bulk actions like "Select All" checkboxes. DO NOT click items one-by-one!
 - If you need to navigate to a URL, ALWAYS navigate in the CURRENT tab (new_tab=false).
 - After navigating, the page changes — wait for the new page state before acting further.
 </SYSTEM_OVERRIDE>"""
