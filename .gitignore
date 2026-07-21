@@ -17,3 +17,5 @@ desktop.ini
 
 # Sensitive/Local Configs
 personal_info.json
+server.log
+com.xenon.server.json

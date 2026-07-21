@@ -279,20 +279,102 @@ async def run_browser_task(task_description: str, send_update_callback, tab_url:
     )
 
     from browser_use import Controller
+    from browser_use.tools.service import Tools
+    from browser_use.tools.views import NavigateAction
+    from browser_use.agent.views import ActionResult
     
-    exclude_actions = []
     task_lower = task_description.lower()
+    user_explicitly_wants_new_tab = any(kw in task_lower for kw in [
+        "new tab", "open tab", "separate tab", "different tab"
+    ])
     
-    # Only disable these tools if the user didn't explicitly ask for them
-    if "new tab" not in task_lower and "open tab" not in task_lower:
-        exclude_actions.append("open_tab")
-    if "search google" not in task_lower and "google search" not in task_lower:
-        exclude_actions.append("search_google")
-    if "navigate to" not in task_lower and "go to" not in task_lower and "new tab" not in task_lower and "open tab" not in task_lower:
-        exclude_actions.append("go_to_url")
+    # ---- XenonNoNewTabTools: subclass that strips new_tab=True ----
+    class XenonNoNewTabTools(Tools):
+        """
+        Subclass of browser-use Tools that prevents unwanted new tab opening.
         
-    controller = Controller(exclude_actions=exclude_actions if exclude_actions else None)
-
+        Layers of protection:
+        1. Intercept the 'navigate' action in act() and force new_tab=False
+           unless the user's task explicitly requested new tabs.
+        2. Patch _detect_new_tab_opened out of click handlers so agent
+           never auto-switches to tabs opened by target=_blank links.
+        3. Inject a CDP script on every navigation that strips target=_blank.
+        """
+        
+        def __init__(self, *args, allow_new_tabs: bool = False, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._allow_new_tabs = allow_new_tabs
+        
+        async def act(self, action, browser_session, **kwargs):
+            action_data = action.model_dump(exclude_unset=True)
+            action_name = next(iter(action_data.keys())) if action_data else 'unknown'
+            
+            if action_name == 'navigate' and not self._allow_new_tabs:
+                nav_params = action_data.get('navigate', {})
+                if nav_params.get('new_tab'):
+                    import logging
+                    logging.getLogger('Xenon').warning(
+                        f'[XenonNoNewTab] BLOCKED new_tab=True for navigate to '
+                        f'{nav_params.get("url", "?")} — forced to current tab'
+                    )
+                    # Mutate the underlying Pydantic model so super().act() sees the change
+                    nav_obj = getattr(action, action_name, None)
+                    if nav_obj and hasattr(nav_obj, 'new_tab'):
+                        nav_obj.new_tab = False
+            
+            result = await super().act(action, browser_session, **kwargs)
+            
+            if (action_name == 'click' and not self._allow_new_tabs
+                    and isinstance(result, ActionResult) and result.extracted_content):
+                if '. Automatically switched to new tab' in result.extracted_content:
+                    result.extracted_content = result.extracted_content.replace(
+                        '. Automatically switched to new tab',
+                        '. Stayed on current page.'
+                    )
+            
+            return result
+    
+    # ---- Patch _detect_new_tab_opened globally ----
+    import browser_use.tools.service as _tools_service
+    
+    _orig_detect = getattr(_tools_service, '_detect_new_tab_opened', None)
+    if _orig_detect:
+        async def _patched_detect_new_tab(browser_session, tabs_before):
+            if user_explicitly_wants_new_tab:
+                return await _orig_detect(browser_session, tabs_before)
+            return ''
+        _tools_service._detect_new_tab_opened = _patched_detect_new_tab
+    
+    # ---- Build exclude actions (correct action names for v0.13.6) ----
+    exclude_actions = []
+    
+    if not user_explicitly_wants_new_tab:
+        exclude_actions.append('open_tab')
+        exclude_actions.append('navigate')
+    if "search google" not in task_lower and "google search" not in task_lower:
+        exclude_actions.append('search')
+    if "new tab" not in task_lower and "open tab" not in task_lower:
+        exclude_actions.append('switch')
+    if not user_explicitly_wants_new_tab:
+        exclude_actions.append('close')
+    
+    controller = XenonNoNewTabTools(
+        exclude_actions=exclude_actions if exclude_actions else None,
+        allow_new_tabs=user_explicitly_wants_new_tab
+    )
+    
+    # ---- Override system prompt ----
+    override_system_message = """<SYSTEM_OVERRIDE>
+CRITICAL: This agent runs in STAY-ON-CURRENT-PAGE mode.
+- NEVER open new tabs. NEVER use navigate with new_tab=true.
+- ALWAYS work within the current page/tab. All navigation, clicking, typing, extraction MUST happen on the current tab.
+- If you clicked a link and a new tab opened, IGNORE it — stay on the current tab and continue your task there.
+- The only exception: if the USER REQUEST explicitly says "open a new tab" or "search Google", you may navigate or search.
+- Your goal is speed. Combine actions aggressively. Use input+click, click+click, input+input in a single step whenever they don't change the page state between actions.
+- If you need to navigate to a URL, ALWAYS navigate in the CURRENT tab (new_tab=false).
+- After navigating, the page changes — wait for the new page state before acting further.
+</SYSTEM_OVERRIDE>"""
+    
     agent = Agent(
         task=enhanced_task,
         llm=model,
@@ -301,9 +383,25 @@ async def run_browser_task(task_description: str, send_update_callback, tab_url:
         register_new_step_callback=step_callback,
         use_thinking=False,
         use_judge=False,
-        max_failures=3,                 # Stop quickly if it fails 3 times in a row
+        max_failures=3,
         loop_detection_enabled=True,
+        extend_system_message=override_system_message,
     )
+
+    if not user_explicitly_wants_new_tab and agent.browser_session:
+        try:
+            target_blank_js = (
+                "(function(){"
+                "var p=HTMLAnchorElement.prototype,orig=Object.getOwnPropertyDescriptor(p,'target')||{set:function(v){this.setAttribute('target',v)},get:function(){return this.getAttribute('target')||''}};"
+                "Object.defineProperty(p,'target',{"
+                "set:function(v){if(v==='_blank'||v==='blank'||v==='_new'||v==='new'){this.setAttribute('target','_self');return;}orig.set.call(this,v);},"
+                "get:orig.get"
+                "});})();"
+            )
+            await agent.browser_session._cdp_add_init_script(target_blank_js)
+            print("[Xenon] Injected target=_blank stripper via CDP Page.addScriptToEvaluateOnNewDocument")
+        except Exception as ex:
+            print(f"[Xenon] Warning: Could not inject target=_blank stripper: {ex}")
 
     try:
         # Hard timeout — turns a silent infinite hang into a clean,

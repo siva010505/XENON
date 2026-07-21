@@ -14,8 +14,15 @@
   "permissions": [
     "sidePanel",
     "storage",
-    "tabs"
+    "tabs",
+    "activeTab",
+    "scripting",
+    "nativeMessaging"
   ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+
   "action": {
     "default_title": "Open Xenon",
     "default_icon": {
