@@ -55,6 +55,8 @@ def isolate_tab_monkeypatch(target_url: str, target_title: str = "", allow_new_t
         
         orig_init = SessionManager._initialize_existing_targets
         
+        existing_target_ids = set()
+        
         async def patched_init(self):
             cdp_client = self.browser_session._cdp_client_root
             if not cdp_client: 
@@ -64,14 +66,10 @@ def isolate_tab_monkeypatch(target_url: str, target_title: str = "", allow_new_t
             
             async def mock_getTargets(*args, **kwargs):
                 result = await orig_getTargets(*args, **kwargs)
-                filtered_infos = []
                 for target_info in result.get('targetInfos', []):
                     tid = target_info.get('targetId')
-                    ttype = target_info.get('type')
-                    if ttype in ('page', 'tab') and tid != target_id:
-                        continue # IGNORE other tabs
-                    filtered_infos.append(target_info)
-                return {'targetInfos': filtered_infos}
+                    existing_target_ids.add(tid)
+                return result
                 
             cdp_client.send.Target.getTargets = mock_getTargets
             try:
@@ -84,8 +82,8 @@ def isolate_tab_monkeypatch(target_url: str, target_title: str = "", allow_new_t
             tid = info.get('targetId')
             ttype = info.get('type')
             
-            if not allow_new_tabs and ttype in ('page', 'tab') and tid != target_id:
-                return # STRICTLY IGNORE ALL OTHER TABS
+            if not allow_new_tabs and ttype in ('page', 'tab') and tid != target_id and tid not in existing_target_ids:
+                return # IGNORE new tabs opened AFTER initial connection
                     
             await orig_handle(self, event)
             
