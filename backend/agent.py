@@ -90,7 +90,7 @@ def isolate_tab_monkeypatch(target_url: str, target_title: str = "", allow_new_t
             if not allow_new_tabs and ttype in ('page', 'tab') and tid != target_id:
                 cdp_client = getattr(self.browser_session, '_cdp_client_root', None)
                 if cdp_client:
-                    asyncio.create_task(cdp_client.send.Target.closeTarget(target_id=tid))
+                    asyncio.create_task(cdp_client.send.Target.closeTarget(tid))
                 return # IGNORE new tabs opened AFTER initial connection
                     
             await orig_handle(self, event)
