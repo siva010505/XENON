@@ -191,20 +191,28 @@ function App() {
   }, [messages]);
 
   useEffect(() => {
-    let connectInterval;
+    let reconnectTimer;
     let socket;
+    let unmounted = false;
 
     const connect = () => {
+      if (unmounted) return;
       // Ask the background script to start the server (forces Service Worker to wake up)
       if (typeof chrome !== 'undefined' && chrome.runtime) {
         chrome.runtime.sendMessage({ action: 'start_server_if_needed' }).catch(() => {});
       }
 
+      // Don't open a new socket if one is already connecting/open
+      if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) {
+        return;
+      }
+
       const currentSocket = new WebSocket('ws://127.0.0.1:8000/ws/chat');
+      socket = currentSocket;
 
       currentSocket.onopen = () => {
+        if (unmounted) { currentSocket.close(); return; }
         setWs(currentSocket);
-        if (connectInterval) clearInterval(connectInterval);
       };
 
       currentSocket.onmessage = (event) => {
@@ -228,26 +236,23 @@ function App() {
 
       currentSocket.onclose = () => {
         setWs(null);
+        socket = null;
+        // Reconnect after 800ms unless component is unmounting
+        if (!unmounted) {
+          reconnectTimer = setTimeout(connect, 800);
+        }
       };
 
-      currentSocket.onerror = (e) => {
+      currentSocket.onerror = () => {
         currentSocket.close();
       };
-      
-      socket = currentSocket;
     };
 
-    connect(); // Initial try
-
-    // Try to reconnect every 2 seconds if not connected
-    connectInterval = setInterval(() => {
-      if (!socket || socket.readyState === WebSocket.CLOSED) {
-        connect();
-      }
-    }, 2000);
+    connect(); // Initial connection
 
     return () => {
-      if (connectInterval) clearInterval(connectInterval);
+      unmounted = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (socket) socket.close();
     };
   }, []);
