@@ -225,6 +225,28 @@ async def run_browser_task(task_description: str, send_update_callback, tab_url:
         await send_update_callback("agent_update", f"Failed to connect to browser. Make sure Chrome is running with --remote-debugging-port=9222. Error: {e}")
         raise e
 
+    # ── Pre-flight: verify the target still exists BEFORE starting the agent ──
+    # Some pages (OAuth redirects, popups) self-close between isolation and agent
+    # start, leaving Chrome with 0 tabs which crashes the CDP session.
+    if target_id:
+        try:
+            live_targets = requests.get(f"{CDP_HTTP}/json").json()
+            live_page_ids = {t['id'] for t in live_targets if t.get('type') == 'page'}
+            if target_id not in live_page_ids:
+                if live_page_ids:
+                    # Target disappeared but other pages exist — use the first one
+                    fallback_id = next(iter(live_page_ids))
+                    print(f"[Xenon] Target {target_id[:8]} gone, falling back to {fallback_id[:8]}")
+                    target_id = fallback_id
+                else:
+                    # No pages at all — Chrome will crash. Abort gracefully.
+                    msg = "The browser tab closed before the agent could start (OAuth redirect?). Please open a new tab and try again."
+                    await send_update_callback("result", msg)
+                    await send_update_callback("done", "Task failed")
+                    return msg
+        except Exception:
+            pass  # If CDP is unreachable, let browser-use handle it
+
     def step_callback(state, output, step_number):
         if not output or not hasattr(output, 'action'):
             return
