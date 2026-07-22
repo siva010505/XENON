@@ -11,16 +11,10 @@ chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ windowId: tab.windowId }).catch((e) => console.error("sidePanel.open error:", e));
 });
 
-// When a tab finishes navigating, re-enable the panel for that tab to prevent Chrome from hiding it
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.status === 'complete') {
-    chrome.sidePanel.setOptions({
-      tabId: tabId,
-      enabled: true,
-      path: 'index.html'
-    }).catch(() => {});
-  }
-});
+chrome.sidePanel.setOptions({
+  path: 'index.html',
+  enabled: true
+}).catch((error) => console.error("setOptions error:", error));
 
 
 let isServerStarted = false;
