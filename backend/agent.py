@@ -12,48 +12,14 @@ TASK_TIMEOUT_SECONDS = 3600  # hard ceiling so nothing hangs forever (1 hour)
 
 def isolate_tab_monkeypatch(target_url: str, target_title: str = "", allow_new_tabs: bool = False):
     """
-    Monkeypatches browser_use SessionManager to completely ignore all background tabs 
-    except the one matching target_url. This prevents watchdogs and CDP from timing out
-    when the browser has dozens of heavy/suspended tabs.
+    Monkeypatches browser_use SessionManager to filter the initial targets list.
+    It resolves the target dynamically at connection time.
     """
     if not target_url:
         return None
         
     try:
-        targets = requests.get(f"{CDP_HTTP}/json").json()
-        target_id = None
-        
-        # 1. Try exact URL match
-        for t in targets:
-            if t.get('type') == 'page' and t.get('url') == target_url:
-                target_id = t.get('id')
-                break
-                
-        # 2. Try prefix/base URL match if exact fails
-        if not target_id:
-            base_url = target_url.split('?')[0].split('#')[0]
-            for t in targets:
-                if t.get('type') == 'page' and t.get('url', '').startswith(base_url):
-                    target_id = t.get('id')
-                    break
-                    
-        # 3. Try Title match if URL still fails
-        if not target_id and target_title:
-            for t in targets:
-                if t.get('type') == 'page' and t.get('title') == target_title:
-                    target_id = t.get('id')
-                    break
-        
-        if not target_id:
-            print(f"Could not find target matching url: {target_url} or title: {target_title}")
-            return None
-            
-        print(f"Isolating browser-use to single tab: {target_id}")
-        
         from browser_use.browser.session_manager import SessionManager
-        
-        orig_handle = SessionManager._handle_target_attached
-        
         orig_init = SessionManager._initialize_existing_targets
         
         async def patched_init(self):
@@ -65,15 +31,48 @@ def isolate_tab_monkeypatch(target_url: str, target_title: str = "", allow_new_t
             
             async def mock_getTargets(*args, **kwargs):
                 result = await orig_getTargets(*args, **kwargs)
-                if target_id:
+                
+                # Resolve dynamically using the actual targets from CDP
+                current_target_id = None
+                
+                # 1. Exact URL match
+                for t in result.get('targetInfos', []):
+                    if t.get('type') == 'page' and t.get('url') == target_url:
+                        current_target_id = t.get('targetId')
+                        break
+                        
+                # 2. Base URL match
+                if not current_target_id:
+                    base_url = target_url.split('?')[0].split('#')[0]
+                    for t in result.get('targetInfos', []):
+                        if t.get('type') == 'page' and t.get('url', '').startswith(base_url):
+                            current_target_id = t.get('targetId')
+                            break
+                            
+                # 3. Title match
+                if not current_target_id and target_title:
+                    for t in result.get('targetInfos', []):
+                        if t.get('type') == 'page' and t.get('title') == target_title:
+                            current_target_id = t.get('targetId')
+                            break
+                            
+                # 4. Fallback to ANY active page if target detached (e.g., cross-process navigation)
+                if not current_target_id:
+                    for t in result.get('targetInfos', []):
+                        if t.get('type') == 'page' and not t.get('url', '').startswith('devtools://'):
+                            current_target_id = t.get('targetId')
+                            break
+                
+                if current_target_id:
                     filtered_targets = []
                     for t in result.get('targetInfos', []):
                         if t.get('type') in ('page', 'tab'):
-                            if t.get('targetId') == target_id:
+                            if t.get('targetId') == current_target_id:
                                 filtered_targets.append(t)
                         else:
                             filtered_targets.append(t)
                     result['targetInfos'] = filtered_targets
+                    
                 return result
                 
             cdp_client.send.Target.getTargets = mock_getTargets
@@ -82,21 +81,9 @@ def isolate_tab_monkeypatch(target_url: str, target_title: str = "", allow_new_t
             finally:
                 cdp_client.send.Target.getTargets = orig_getTargets
                     
-        async def patched_handle(self, event):
-            info = event.get('targetInfo', {})
-            tid = info.get('targetId')
-            ttype = info.get('type')
-            
-            if not allow_new_tabs and ttype in ('page', 'tab') and tid != target_id:
-                return # IGNORE new tabs opened AFTER initial connection
-                    
-            await orig_handle(self, event)
-            
-        # Apply patches
+        # Apply patch
         SessionManager._initialize_existing_targets = patched_init
-        SessionManager._handle_target_attached = patched_handle
-        
-        return target_id
+        return "dynamic_target"
     except Exception as e:
         print(f"Monkeypatch setup failed: {e}")
         return None
@@ -221,27 +208,8 @@ async def run_browser_task(task_description: str, send_update_callback, tab_url:
         await send_update_callback("agent_update", f"Failed to connect to browser. Make sure Chrome is running with --remote-debugging-port=9222. Error: {e}")
         raise e
 
-    # ── Pre-flight: verify the target still exists BEFORE starting the agent ──
-    # Some pages (OAuth redirects, popups) self-close between isolation and agent
-    # start, leaving Chrome with 0 tabs which crashes the CDP session.
-    if target_id:
-        try:
-            live_targets = requests.get(f"{CDP_HTTP}/json").json()
-            live_page_ids = {t['id'] for t in live_targets if t.get('type') == 'page'}
-            if target_id not in live_page_ids:
-                if live_page_ids:
-                    # Target disappeared but other pages exist — use the first one
-                    fallback_id = next(iter(live_page_ids))
-                    print(f"[Xenon] Target {target_id[:8]} gone, falling back to {fallback_id[:8]}")
-                    target_id = fallback_id
-                else:
-                    # No pages at all — Chrome will crash. Abort gracefully.
-                    msg = "The browser tab closed before the agent could start (OAuth redirect?). Please open a new tab and try again."
-                    await send_update_callback("result", msg)
-                    await send_update_callback("done", "Task failed")
-                    return msg
-        except Exception:
-            pass  # If CDP is unreachable, let browser-use handle it
+    # ── Pre-flight check has been removed because it is now handled dynamically
+    # inside isolate_tab_monkeypatch at connection time.
 
     def step_callback(state, output, step_number):
         if not output or not hasattr(output, 'action'):
