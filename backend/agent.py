@@ -374,6 +374,16 @@ CRITICAL: This agent runs in STAY-ON-CURRENT-PAGE mode.
 - AVOID REPETITIVE LOOPS. If asked to process many items (e.g. delete all emails), find and use bulk actions like "Select All" checkboxes. DO NOT click items one-by-one!
 - If you need to navigate to a URL, ALWAYS navigate in the CURRENT tab (new_tab=false).
 - After navigating, the page changes — wait for the new page state before acting further.
+
+ELEMENT INTERACTION RULES (CRITICAL - READ CAREFULLY):
+- The browser gives you a list of numbered interactive elements (e.g. [1], [2], [3]...) in every step. These are the ONLY elements you can directly click or type into.
+- `find_elements` is a SEARCH TOOL ONLY — it tells you if something exists, but it does NOT give you an interaction index.
+- After calling `find_elements` ONCE and confirming an element exists, DO NOT call `find_elements` again on the same page. Instead:
+  * Look at the numbered elements list in the current page state.
+  * Find the matching element by its label/placeholder/text.
+  * Use `click_element` or `input_text` with that number to interact.
+- If the element is visible in the page but not numbered (not interactable), use `evaluate` to click/type via JavaScript.
+- NEVER call `find_elements` more than once looking for the same element. It is a loop and wastes tokens.
 </SYSTEM_OVERRIDE>"""
     
     agent = Agent(
