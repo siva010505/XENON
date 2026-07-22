@@ -1,8 +1,27 @@
 console.log("Background script loaded");
+
+// Open the panel at window level (NOT tab-level) so it stays open when the tab navigates
+// openPanelOnActionClick: true opens per-tab — Chrome closes it on navigation. We handle it manually.
 chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
-  .then(() => console.log("Side panel behavior set"))
-  .catch((error) => console.error(error));
+  .setPanelBehavior({ openPanelOnActionClick: false })
+  .catch((error) => console.error("setPanelBehavior error:", error));
+
+// When user clicks the extension icon, open the panel for the WINDOW (not the tab)
+chrome.action.onClicked.addListener((tab) => {
+  chrome.sidePanel.open({ windowId: tab.windowId }).catch((e) => console.error("sidePanel.open error:", e));
+});
+
+// When a tab finishes navigating, re-enable the panel for that tab to prevent Chrome from hiding it
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === 'complete') {
+    chrome.sidePanel.setOptions({
+      tabId: tabId,
+      enabled: true,
+      path: 'index.html'
+    }).catch(() => {});
+  }
+});
+
 
 let isServerStarted = false;
 
