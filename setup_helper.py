@@ -64,7 +64,11 @@ print("\n[2/5] Installing Playwright Chromium Browser...")
 subprocess.run([sys.executable, "-m", "pip", "install", "playwright"], check=False)
 res_pw = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
 
-print("\n[3/5] Updating Chrome Native Messaging Manifest...")
+print("\n[3/5] Updating Chrome Native Messaging Manifest & Launcher...")
+bat_content = f'@echo off\n"{sys.executable}" "%~dp0native_host.py" %*\n'
+with open(BAT_PATH, "w") as f:
+    f.write(bat_content)
+
 data = {
     "name": "com.xenon.server",
     "description": "Xenon Background Server Launcher",
