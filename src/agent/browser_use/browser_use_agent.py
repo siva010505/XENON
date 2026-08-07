@@ -7,13 +7,22 @@ import os
 # from lmnr.sdk.decorators import observe
 from browser_use.agent.gif import create_history_gif
 from browser_use.agent.service import Agent, AgentHookFunc
-from browser_use.agent.views import (
-    ActionResult,
-    AgentHistory,
-    AgentHistoryList,
-    AgentStepInfo,
-    ToolCallingMethod,
-)
+try:
+    from browser_use.agent.views import (
+        ActionResult,
+        AgentHistory,
+        AgentHistoryList,
+        AgentStepInfo,
+        ToolCallingMethod,
+    )
+except ImportError:
+    from browser_use.agent.views import (
+        ActionResult,
+        AgentHistory,
+        AgentHistoryList,
+        AgentStepInfo,
+    )
+    ToolCallingMethod = Any
 from browser_use.browser.views import BrowserStateHistory
 from browser_use.utils import time_execution_async
 from dotenv import load_dotenv
