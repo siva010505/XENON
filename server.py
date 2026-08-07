@@ -1,9 +1,14 @@
 import sys
 import os
-if sys.stdout is None:
-    sys.stdout = open(os.devnull, 'w')
-if sys.stderr is None:
-    sys.stderr = open(os.devnull, 'w')
+os.environ["ANONYMIZED_TELEMETRY"] = "false"
+log_path = os.path.join(os.path.dirname(__file__), "server_debug.log")
+try:
+    if sys.stdout is None:
+        sys.stdout = open(log_path, "a")
+    if sys.stderr is None:
+        sys.stderr = open(log_path, "a")
+except Exception:
+    pass
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -736,7 +741,7 @@ def main():
     args = parser.parse_args()
 
     import uvicorn
-    uvicorn.run(app, host=args.ip, port=args.port, log_level="info")
+    uvicorn.run(app, host=args.ip, port=args.port)
 
 
 if __name__ == "__main__":
