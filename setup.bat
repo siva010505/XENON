@@ -7,6 +7,7 @@ echo               XENON AUTOMATED SETUP
 echo ========================================================
 echo.
 
+:RUN_SETUP
 :: 1. Try py -3.11
 py -3.11 --version >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
@@ -28,39 +29,51 @@ if %ERRORLEVEL% EQU 0 (
     goto :END
 )
 
-:: 4. If Python 3.11+ not found, download & launch Python installer
+:: 4. Try standard Python 3.11 / 3.12 direct executable paths
+if exist "%LocalAppData%\Programs\Python\Python311\python.exe" (
+    "%LocalAppData%\Programs\Python\Python311\python.exe" setup_helper.py
+    goto :END
+)
+if exist "%LocalAppData%\Programs\Python\Python312\python.exe" (
+    "%LocalAppData%\Programs\Python\Python312\python.exe" setup_helper.py
+    goto :END
+)
+if exist "C:\Program Files\Python311\python.exe" (
+    "C:\Program Files\Python311\python.exe" setup_helper.py
+    goto :END
+)
+if exist "C:\Program Files\Python312\python.exe" (
+    "C:\Program Files\Python312\python.exe" setup_helper.py
+    goto :END
+)
+
+:: 5. If Python 3.11+ is completely missing, download & run Python installer automatically
 echo ⚠️ Python 3.11+ is required but was not found on your system.
-echo Downloading official Python 3.11 installer from python.org...
+echo Automatically downloading official Python 3.11 installer from python.org...
 echo.
 
 set "INSTALLER=%TEMP%\python-3.11.9-amd64.exe"
 
 curl.exe -sSL -o "%INSTALLER%" "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe"
 if not exist "%INSTALLER%" (
-    powershell -Command "(New-Object System.Net.WebClient).Headers.Add('User-Agent', 'Mozilla/5.0'); (New-Object System.Net.WebClient).DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', '%INSTALLER%')"
+    powershell -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object System.Net.WebClient).Headers.Add('User-Agent', 'Mozilla/5.0'); (New-Object System.Net.WebClient).DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', '%INSTALLER%')"
 )
 
 if exist "%INSTALLER%" (
-    echo.
     echo Launching Python 3.11 Installer...
-    echo 📌 IMPORTANT: In the installer window, make sure to check "Add python.exe to PATH"!
+    echo 📌 In the installer window, please click "Install Now"!
     echo.
     start /wait "" "%INSTALLER%" /passive PrependPath=1
     if errorlevel 1 (
         start /wait "" "%INSTALLER%"
     )
+    del "%INSTALLER%" >nul 2>&1
+    echo.
+    echo Python installation complete! Running Xenon setup...
+    goto :RUN_SETUP
 ) else (
     echo ❌ Automatic download failed. Opening Python download page in your browser...
     start https://www.python.org/downloads/
-)
-
-echo.
-echo Re-checking Python setup...
-py -3.11 setup_helper.py 2>nul || py -3 setup_helper.py 2>nul || python setup_helper.py 2>nul
-
-if errorlevel 1 (
-    echo.
-    echo ℹ️ If Python 3.11 was just installed, please close this window and double-click setup.bat again to finish!
 )
 
 :END

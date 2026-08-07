@@ -12,6 +12,33 @@ PROFILE_DIR = os.path.join(PROJECT_DIR, "chrome_profile")
 MANIFEST_PATH = os.path.join(EXT_DIR, "com.xenon.server.json")
 BAT_PATH = os.path.join(PROJECT_DIR, "run_native_host.bat")
 
+def find_chrome_path():
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe")
+        path, _ = winreg.QueryValueEx(key, "")
+        if os.path.exists(path):
+            return path
+    except Exception:
+        pass
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe")
+        path, _ = winreg.QueryValueEx(key, "")
+        if os.path.exists(path):
+            return path
+    except Exception:
+        pass
+    candidates = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe")
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+    return r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+
 print("========================================================")
 print("               XENON AUTOMATED SETUP")
 print("========================================================\n")
@@ -54,16 +81,17 @@ reg_key = r"HKCU\Software\Google\Chrome\NativeMessagingHosts\com.xenon.server"
 subprocess.run(["REG", "ADD", reg_key, "/ve", "/t", "REG_SZ", "/d", MANIFEST_PATH, "/f"], check=False)
 
 print("\n[5/5] Creating 'Xenon Chrome' Desktop Shortcut...")
+chrome_exe = find_chrome_path()
 ps_script = f"""
 $WshShell = New-Object -ComObject WScript.Shell
 $DesktopPath = [Environment]::GetFolderPath('Desktop')
 $Shortcut = $WshShell.CreateShortcut("$DesktopPath\\Xenon Chrome.lnk")
-$Shortcut.TargetPath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+$Shortcut.TargetPath = '{chrome_exe}'
 $Shortcut.Arguments = '--remote-debugging-port=9222 --user-data-dir="{PROFILE_DIR}" --load-extension="{EXT_DIR}"'
-$Shortcut.IconLocation = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe,0'
+$Shortcut.IconLocation = '{chrome_exe},0'
 $Shortcut.Save()
 """
-subprocess.run(["powershell", "-Command", ps_script], check=False)
+subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-Command", ps_script], check=False)
 
 print("\n========================================================")
 print("SUCCESS: XENON SETUP COMPLETE!")
