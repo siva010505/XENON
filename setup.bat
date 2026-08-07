@@ -33,7 +33,22 @@ echo ⚠️ Python 3.11+ was not found on your system.
 echo Downloading official Python 3.11 installer from python.org...
 echo.
 
-powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $out = '$env:TEMP\python-3.11.9-amd64.exe'; (New-Object System.Net.WebClient).DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', $out); Start-Process -FilePath $out -ArgumentList '/passive PrependPath=1' -Wait"
+set INSTALLER=%TEMP%\python-3.11.9-amd64.exe
+
+curl.exe -sSL -o "%INSTALLER%" "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe"
+if not exist "%INSTALLER%" (
+    powershell -Command "(New-Object System.Net.WebClient).Headers.Add('User-Agent', 'Mozilla/5.0'); (New-Object System.Net.WebClient).DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', '%INSTALLER%')"
+)
+
+if exist "%INSTALLER%" (
+    echo Installing Python 3.11 automatically (Adding to PATH)...
+    "%INSTALLER%" /passive PrependPath=1
+    del "%INSTALLER%" >nul 2>&1
+) else (
+    echo ❌ Automatic download failed. Please download Python 3.11 manually from https://www.python.org/downloads/
+    pause
+    exit /b
+)
 
 echo.
 echo Python installation complete! Running Xenon setup...
