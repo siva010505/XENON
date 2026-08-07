@@ -4,6 +4,7 @@ import json
 import struct
 import socket
 import subprocess
+import time
 
 PORT = 7788
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -27,38 +28,28 @@ def start_server_silently():
     if is_server_running():
         return True
 
-    python_executable = sys.executable
-    # On Windows, pythonw.exe runs without creating any command window
-    pythonw_path = os.path.join(os.path.dirname(python_executable), "pythonw.exe")
-    exec_path = pythonw_path if os.path.exists(pythonw_path) else python_executable
+    python_exec = sys.executable
+    server_path = os.path.join(PROJECT_DIR, "server.py")
 
-    # Windows flags for completely detached, hidden process
-    creationflags = 0x08000000 | 0x00000008  # CREATE_NO_WINDOW | DETACHED_PROCESS
-
+    # Launch server.py silently in background using sys.executable
     try:
         subprocess.Popen(
-            [exec_path, SERVER_SCRIPT],
+            [python_exec, server_path],
             cwd=PROJECT_DIR,
-            creationflags=creationflags,
+            creationflags=0x08000000, # CREATE_NO_WINDOW
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,
-            close_fds=True,
         )
-        return True
-    except Exception as e:
-        # Fallback to standard Popen
-        try:
-            subprocess.Popen(
-                [exec_path, SERVER_SCRIPT],
-                cwd=PROJECT_DIR,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                stdin=subprocess.DEVNULL,
-            )
+    except Exception:
+        pass
+
+    for _ in range(12):
+        time.sleep(0.5)
+        if is_server_running():
             return True
-        except Exception:
-            return False
+
+    return is_server_running()
 
 
 def read_message():

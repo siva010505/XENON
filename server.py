@@ -1,3 +1,10 @@
+import sys
+import os
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w')
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -5,7 +12,6 @@ import argparse
 import asyncio
 import json
 import logging
-import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -16,7 +22,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from src.webui.webui_manager import WebuiManager
+class WebuiManager:
+    def __init__(self):
+        self.bu_chat_history = []
+        self.bu_current_task = None
+        self.bu_browser = None
+        self.bu_browser_context = None
+        self.bu_controller = None
+        self.bu_agent = None
+        self.bu_agent_task_id = None
+        self.bu_response_event = None
+        self.bu_user_help_response = None
+
+    def init_browser_use_agent(self):
+        pass
+
 from src.agent.browser_use.browser_use_agent import BrowserUseAgent
 from src.browser.custom_browser import CustomBrowser
 from src.browser.custom_context import CustomBrowserContext
