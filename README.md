@@ -2,6 +2,10 @@
 
 A powerful Chrome Sidepanel AI Assistant that automates web tasks seamlessly inside your host Chrome browser.
 
+## 📋 Prerequisites
+- **Windows OS**
+- **Python 3.11 or newer** ([Download Python 3.11/3.12](https://www.python.org/downloads/))
+
 ---
 
 ## 🚀 Quick Start Guide (Windows)

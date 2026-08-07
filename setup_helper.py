@@ -3,6 +3,9 @@ import sys
 import json
 import subprocess
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 EXT_DIR = os.path.join(PROJECT_DIR, "extension")
 PROFILE_DIR = os.path.join(PROJECT_DIR, "chrome_profile")
@@ -13,11 +16,25 @@ print("========================================================")
 print("               XENON AUTOMATED SETUP")
 print("========================================================\n")
 
+v = sys.version_info
+if v < (3, 11):
+    print("========================================================")
+    print("❌ ERROR: PYTHON VERSION INCOMPATIBLE!")
+    print(f"Xenon requires Python 3.11 or newer.")
+    print(f"Your system is currently running Python {v.major}.{v.minor}.{v.micro} ({sys.executable}).")
+    print("")
+    print("Please download and install Python 3.11 or 3.12:")
+    print("👉 Download link: https://www.python.org/downloads/")
+    print("========================================================\n")
+    sys.exit(1)
+
 print("[1/5] Installing Python Dependencies...")
-subprocess.run([sys.executable, "-m", "pip", "install", "-r", os.path.join(PROJECT_DIR, "requirements.txt")], check=False)
+res_pip = subprocess.run([sys.executable, "-m", "pip", "install", "-r", os.path.join(PROJECT_DIR, "requirements.txt")], check=False)
+if res_pip.returncode != 0:
+    print("\n❌ WARNING: Dependency installation encountered errors. Please check your internet connection or Python setup.")
 
 print("\n[2/5] Installing Playwright Chromium Browser...")
-subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
+res_pw = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
 
 print("\n[3/5] Updating Chrome Native Messaging Manifest...")
 data = {
@@ -47,9 +64,6 @@ $Shortcut.IconLocation = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome
 $Shortcut.Save()
 """
 subprocess.run(["powershell", "-Command", ps_script], check=False)
-
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
 
 print("\n========================================================")
 print("SUCCESS: XENON SETUP COMPLETE!")
