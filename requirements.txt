@@ -1,3 +1,4 @@
+playwright>=1.40.0
 browser-use>=0.1.48
 pyperclip>=1.9.0
 gradio>=5.27.0

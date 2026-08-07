@@ -61,6 +61,7 @@ if res_pip.returncode != 0:
     print("\n❌ WARNING: Dependency installation encountered errors. Please check your internet connection or Python setup.")
 
 print("\n[2/5] Installing Playwright Chromium Browser...")
+subprocess.run([sys.executable, "-m", "pip", "install", "playwright"], check=False)
 res_pw = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
 
 print("\n[3/5] Updating Chrome Native Messaging Manifest...")
