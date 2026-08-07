@@ -1,0 +1,13 @@
+{
+  "name": "com.browseruse.bridge",
+  "description": "Browser Use native messaging host for Chrome side panel",
+  "path": "C:\\Users\\acer\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+  "args": [
+    "C:\\Users\\acer\\ONEDRI~1\\AUTO\\extension\\host\\bridge.py"
+  ],
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://ghbmnnjooekpmoecnnnilnnbdlolhkhi",
+    "chrome-extension://*"
+  ]
+}

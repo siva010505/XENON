@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Xenon",
+  "version": "1.2",
+  "description": "AI-powered browser automation side panel",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAp/NknAvJD13Xez/i4KhAnrMRCSclHxBoVv5iodiVcSbGTbGGW4mNEarC9WK7rlj/8Rg8VxH/TA156blQ5BVVgDMyDNELH1ip4mmRPxnQB/eVB1U//SDDt8QOyTBk2a6ADKYxnMZcpPVJyFaSAlcieV6nKDBHu7UAI2D8G0FvnZnctWv9KQgTcBHd021eZOHINbqqSihVhjit4PCVORXJyoKUVBjcAmadblkGtWm9ql2JRjgFpdMZx2/yOZ2lnJrENjRkjWksKOWKhfQ0NZ85aW1LRTO8LLCasmSTSvAixXqtcUDy8c5/XCneVkl+LN33V4CUpQBHJqO0pEraqpMswQIDAQAB",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "tabs",
+    "activeTab",
+    "scripting",
+    "audioCapture",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "http://localhost:7788/*",
+    "http://127.0.0.1:7788/*",
+    "http://localhost:9222/*",
+    "<all_urls>"
+  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Xenon",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}

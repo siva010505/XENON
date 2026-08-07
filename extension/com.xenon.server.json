@@ -1,0 +1,9 @@
+{
+  "name": "com.xenon.server",
+  "description": "Xenon Background Server Launcher",
+  "path": "C:\\Users\\acer\\OneDrive - ELCOT\\AUTO\\run_native_host.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://bgcejckonpajffecfflnoplmmdpdahgg/"
+  ]
+}
