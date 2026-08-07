@@ -4,26 +4,31 @@ A powerful Chrome Sidepanel AI Assistant that automates web tasks seamlessly ins
 
 ---
 
-## 🚀 1-Click Quick Start (Windows)
+## 🚀 Quick Start Guide (Windows)
 
-### 1. Clone Repository
-```bash
-git clone https://github.com/siva010505/XENON.git
-cd XENON
-```
+### Step 1: Get XENON
 
-### 2. Run 1-Click Setup
-Double-click **`setup.bat`** once.
+- **Option A (Easiest — No Git Required)**:
+  Click the green **`Code`** button at the top of this GitHub page -> **`Download ZIP`**, then extract the ZIP folder to your computer.
+
+- **Option B (For Developers / Git users)**:
+  ```bash
+  git clone https://github.com/siva010505/XENON.git
+  cd XENON
+  ```
+
+### Step 2: Run 1-Click Setup
+Double-click **`setup.bat`** inside the project folder.
 
 This automated script will:
-- Install Python dependencies & Playwright Chromium.
+- Install Python dependencies & Playwright Chromium automatically.
 - Register the silent background server launcher in Windows Registry.
 - Create a **`Xenon Chrome`** shortcut on your Desktop with debugging port `9222`, dedicated profile, and auto-loaded extension.
 
-### 3. Launch & Use Xenon!
+### Step 3: Launch & Use Xenon!
 1. Double-click the **`Xenon Chrome`** shortcut on your Desktop.
 2. Sign in to your Google / Gmail account in Chrome.
-3. Open `chrome://extensions`, enable **Developer Mode** (top-right toggle), and click **Load unpacked** -> select the `extension` folder inside this project directory.
+3. Open `chrome://extensions`, enable **Developer Mode** (top-right toggle), and click **Load unpacked** -> select the `extension` folder from this project directory.
 4. Click the **Xenon** side panel icon in Chrome, enter your AI API Key in **Settings** once, and start giving tasks!
 
 ---
