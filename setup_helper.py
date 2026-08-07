@@ -65,9 +65,30 @@ subprocess.run([sys.executable, "-m", "pip", "install", "playwright"], check=Fal
 res_pw = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
 
 print("\n[3/5] Updating Chrome Native Messaging Manifest & Launcher...")
+# Write run_native_host.bat with this Python executable
 bat_content = f'@echo off\n"{sys.executable}" "%~dp0native_host.py" %*\n'
 with open(BAT_PATH, "w") as f:
     f.write(bat_content)
+
+# Also patch native_host.py so it always uses the correct Python for server.py
+native_host_path = os.path.join(PROJECT_DIR, "native_host.py")
+python_path_escaped = sys.executable.replace("\\", "\\\\")
+try:
+    with open(native_host_path, "r", encoding="utf-8") as f:
+        nh_content = f.read()
+    # Replace the PYTHON_EXECUTABLE line with the correct path
+    import re
+    nh_content = re.sub(
+        r'^PYTHON_EXECUTABLE\s*=\s*.*$',
+        f'PYTHON_EXECUTABLE = r"{sys.executable}"',
+        nh_content,
+        flags=re.MULTILINE
+    )
+    with open(native_host_path, "w", encoding="utf-8") as f:
+        f.write(nh_content)
+    print(f"  → Patched native_host.py to use: {sys.executable}")
+except Exception as e:
+    print(f"  → Warning: Could not patch native_host.py: {e}")
 
 data = {
     "name": "com.xenon.server",

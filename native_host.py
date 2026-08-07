@@ -10,6 +10,33 @@ PORT = 7788
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 SERVER_SCRIPT = os.path.join(PROJECT_DIR, "server.py")
 
+# Path to the Python executable that has all dependencies installed.
+# This is written dynamically by setup_helper.py during setup.
+PYTHON_EXECUTABLE = r"C:\Users\acer\AppData\Local\Programs\Python\Python312\python.exe"
+
+
+def _find_python():
+    """Return the Python executable that can run server.py."""
+    # 1. First try the path written by setup_helper.py (most reliable)
+    if PYTHON_EXECUTABLE and os.path.exists(PYTHON_EXECUTABLE):
+        return PYTHON_EXECUTABLE
+
+    # 2. Try common known install locations (prefer 3.12, 3.11)
+    candidates = [
+        os.path.expandvars(r"%LocalAppData%\Programs\Python\Python312\python.exe"),
+        os.path.expandvars(r"%LocalAppData%\Programs\Python\Python311\python.exe"),
+        r"C:\Program Files\Python312\python.exe",
+        r"C:\Program Files\Python311\python.exe",
+        r"C:\Python312\python.exe",
+        r"C:\Python311\python.exe",
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+
+    # 3. Fall back to whichever python is running this script
+    return sys.executable
+
 
 def is_server_running(port=PORT):
     """Check if FastAPI server is listening on port 7788."""
@@ -28,15 +55,17 @@ def start_server_silently():
     if is_server_running():
         return True
 
-    python_executable = sys.executable
+    python_executable = _find_python()
+    log_path = os.path.join(PROJECT_DIR, "server_boot.log")
 
     try:
+        log_file = open(log_path, "a")
         subprocess.Popen(
             [python_executable, SERVER_SCRIPT],
             cwd=PROJECT_DIR,
             creationflags=0x08000000,  # CREATE_NO_WINDOW
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=log_file,
             stdin=subprocess.DEVNULL,
         )
     except Exception:
