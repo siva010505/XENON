@@ -56,9 +56,12 @@ if v < (3, 11):
     sys.exit(1)
 
 print("[1/5] Installing Python Dependencies...")
-res_pip = subprocess.run([sys.executable, "-m", "pip", "install", "-r", os.path.join(PROJECT_DIR, "requirements.txt")], check=False)
+subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"], check=False,
+               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+res_pip = subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "-r",
+                          os.path.join(PROJECT_DIR, "requirements.txt")], check=False)
 if res_pip.returncode != 0:
-    print("\n❌ WARNING: Dependency installation encountered errors. Please check your internet connection or Python setup.")
+    print("\nWARNING: Dependency installation encountered errors. Please check your internet connection or Python setup.")
 
 print("\n[2/5] Installing Playwright Chromium Browser...")
 subprocess.run([sys.executable, "-m", "pip", "install", "playwright"], check=False)
@@ -72,23 +75,20 @@ with open(BAT_PATH, "w") as f:
 
 # Also patch native_host.py so it always uses the correct Python for server.py
 native_host_path = os.path.join(PROJECT_DIR, "native_host.py")
-python_path_escaped = sys.executable.replace("\\", "\\\\")
 try:
     with open(native_host_path, "r", encoding="utf-8") as f:
-        nh_content = f.read()
-    # Replace the PYTHON_EXECUTABLE line with the correct path
-    import re
-    nh_content = re.sub(
-        r'^PYTHON_EXECUTABLE\s*=\s*.*$',
-        f'PYTHON_EXECUTABLE = r"{sys.executable}"',
-        nh_content,
-        flags=re.MULTILINE
-    )
+        lines = f.readlines()
+    new_lines = []
+    for line in lines:
+        if line.strip().startswith("PYTHON_EXECUTABLE"):
+            new_lines.append('PYTHON_EXECUTABLE = r"' + sys.executable + '"\n')
+        else:
+            new_lines.append(line)
     with open(native_host_path, "w", encoding="utf-8") as f:
-        f.write(nh_content)
-    print(f"  → Patched native_host.py to use: {sys.executable}")
+        f.writelines(new_lines)
+    print(f"  -> Patched native_host.py to use: {sys.executable}")
 except Exception as e:
-    print(f"  → Warning: Could not patch native_host.py: {e}")
+    print(f"  -> Warning: Could not patch native_host.py: {e}")
 
 data = {
     "name": "com.xenon.server",
